@@ -418,3 +418,114 @@ mutation {
   }
 }
 ```
+
+#### Delete
+
+```javascript
+
+// Schema Definition
+type Mutation {
+  deleteUser(id: ID!): User!
+  deletePost(id: ID!): Post!
+  deleteComment(id: ID!): Comment!
+}
+
+// Resolvers
+const Mutation = {
+  deleteUser(parent, args, { mock }, info) {
+    const userIndex = mock.users.findIndex((user) => user.id === args.id);
+
+    if (userIndex === -1) {
+      throw new Error('User not found');
+    }
+
+    const deletedUsers = mock.users.splice(userIndex, 1);
+
+    posts = posts.filter((post) => {
+      const match = post.author === args.id;
+
+      if (match) {
+        mock.comments = mock.comments.filter((comment) => comment.post !== post.id);
+      }
+
+      return !match;
+    });
+    mock.comments = mock.comments.filter((comment) => comment.author !== args.id);
+
+    return deletedUsers[0];
+  },
+  deletePost(parent, args, { mock }, info) {
+    const postIndex = mock.posts.findIndex((post) => post.id === args.id);
+
+    if (postIndex === -1) {
+      throw new Error('Post not found');
+    }
+
+    const deletedPosts = mock.posts.splice(postIndex, 1);
+
+    mock.comments = mock.comments.filter((comment) => comment.post !== args.id);
+
+    return deletedPosts[0];
+  },
+  deleteComment(parent, args, { mock }, info) {
+    const commentIndex = mock.comments.findIndex((comment) => comment.id === args.id);
+
+    if (commentIndex === -1) {
+      throw new Error('Comment not found');
+    }
+
+    const deletedComments = mock.comments.splice(commentIndex, 1);
+
+    return deletedComments[0];
+  },
+};
+```
+
+#### Update
+
+```javascript
+
+// Schema Definition
+type Mutation {
+  updateUser(id: ID!, data: UpdateUserInput!): User!
+}
+
+input UpdateUserInput {
+  name: String
+  email: String
+  age: Int
+}
+
+
+// Resolvers
+const Mutation = {
+  updateUser(parent, args, { db }, info) {
+    const { id, data } = args;
+    const user = db.users.find((user) => user.id === id);
+
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    if (typeof data.email === 'string') {
+      const emailTaken = db.users.some((user) => user.email === data.email);
+
+      if (emailTaken) {
+        throw new Error('Email taken');
+      }
+
+      user.email = data.email;
+    }
+
+    if (typeof data.name === 'string') {
+      user.name = data.name;
+    }
+
+    if (typeof data.age !== 'undefined') {
+      user.age = data.age;
+    }
+
+    return user;
+  },
+};
+```
