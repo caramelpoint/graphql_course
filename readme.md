@@ -529,3 +529,128 @@ const Mutation = {
   },
 };
 ```
+
+### Subscriptions
+
+In addition to queries and mutations, GraphQL supports a third operation type: subscriptions.
+Like queries, subscriptions enable you to fetch data. Unlike queries, subscriptions maintain an active connection to your GraphQL server (most commonly via WebSocket). This enables your server to push updates to the subscription's result over time.
+Subscriptions are useful for notifying your client in real time about changes to back-end data, such as the creation of a new object or updates to an important field.
+
+```javascript
+//Schema
+type Subscription {
+  count: Int!
+  comment(postId: ID!): CommentSubscriptionPayload!
+  post: PostSubscriptionPayload!
+}
+
+enum MutationType {
+  CREATED
+  UPDATED
+  DELETED
+}
+
+type PostSubscriptionPayload {
+  mutation: MutationType!
+  data: Post!
+}
+
+type CommentSubscriptionPayload {
+  mutation: MutationType!
+  data: Comment!
+}
+
+// Resolvers
+const Subscription = {
+  count: {
+    subscribe(parent, args, { pubsub }, info) {
+      const channelName = 'count';
+      let count = 0;
+
+      setInterval(() => {
+        count++;
+        pubsub.publish(
+          channelName,
+          {
+            count,
+          },
+          3000
+        );
+      });
+      // Channel Name
+      return pubsub.asyncIterator(channelName);
+    },
+  },
+
+  comment: {
+    subscribe(parent, { postId }, { db, pubsub }, info) {
+      const channelName = `comment ${postId}`;
+      const post = db.posts.find((post) => post.id === postId && post.published);
+      if (!post) {
+        throw new Error('Post Not found!');
+      }
+      return pubsub.asyncIterator(channelName);
+    },
+  },
+
+  post: {
+    subscribe(parent, args, { pubsub }, info) {
+      const channelName = 'post';
+      return pubsub.asyncIterator(channelName);
+    },
+  },
+};
+
+//Mutations 
+  createPost(parent, args, { db, pubsub }, info) {
+    const userExists = db.users.some((user) => user.id === args.data.author);
+
+    if (!userExists) {
+      throw new Error('User not found');
+    }
+
+    const post = {
+      id: uuidv4(),
+      ...args.data,
+    };
+
+    if (post.published) {
+      pubsub.publish('post', {
+        post: {
+          mutation: 'CREATED',
+          data: post,
+        },
+      });
+    }
+    db.posts.push(post);
+
+    return post;
+  },
+  
+// Main
+import { GraphQLServer, PubSub } from 'graphql-yoga';
+import mock from './mock';
+import { Query, Mutation, Post, User, Comment, Subscription } from './resolvers';
+
+const pubsub = new PubSub();
+
+const server = new GraphQLServer({
+  typeDefs: './src/schema.graphql',
+  resolvers: {
+    Query,
+    Mutation,
+    Subscription,
+    Post,
+    Comment,
+    User,
+  },
+  context: {
+    mock,
+    pubsub,
+  },
+});
+
+server.start(() => {
+  console.log('The server is up!');
+});
+```
